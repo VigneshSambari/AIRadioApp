@@ -1,11 +1,11 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, sort_child_properties_last
 
 import 'package:airadio/model/radio.dart';
-//import 'package:audioplayers/audioplayers.dart';
+import 'package:alan_voice/alan_voice.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:velocity_x/velocity_x.dart';
 
 class HomePage extends StatefulWidget {
@@ -18,22 +18,53 @@ class _HomePageState extends State<HomePage> {
   late MyRadio selectedRadio;
   late Color selectedColor;
   late bool isPlaying = false;
+  final AudioPlayer audioPlayer = AudioPlayer();
 
-  //final AudioPlayer audioPlayer = AudioPlayer();
+  @override
+  void dispose() {
+    audioPlayer.dispose();
+    // TODO: implement dispose
+    super.dispose();
+  }
 
   @override
   void initState() {
+    setUpAlan();
     fetchRadios();
+    audioPlayer.onPlayerStateChanged.listen((event) {
+      if (event == PlayerState.playing) {
+        isPlaying = true;
+      } else {
+        isPlaying = false;
+      }
+      setState(() {});
+    });
     super.initState();
+  }
+
+  setUpAlan() {
+    AlanVoice.addButton(
+        "cc614b127e5146298d169e32353486412e956eca572e1d8b807a3e2338fdd0dc/stage/stage",
+        buttonAlign: AlanVoice.BUTTON_ALIGN_LEFT);
+  }
+
+  playMusic(String url) {
+    Source source = UrlSource(url);
+    audioPlayer.play(source);
+    selectedRadio = radios!.firstWhere((element) => element.url == url);
+    print(selectedRadio.name);
+    setState(() {});
   }
 
   fetchRadios() async {
     final radioJson = await rootBundle.loadString("assets/radio.json");
     radios = MyRadioList.fromJson(radioJson).radios;
-    //selectedRadio = radios[0];
-    //selectedColor = Color(int.tryParse(_selectedRadio.color));
-    print(radios);
-    setState(() {});
+    selectedRadio = radios![0];
+    selectedColor = Color(int.tryParse(selectedRadio.color) ?? 0xff090909);
+    //print(radios);
+    setState(() {
+      selectedColor;
+    });
   }
 
   @override
@@ -45,7 +76,7 @@ class _HomePageState extends State<HomePage> {
           VxAnimatedBox()
               .size(context.screenWidth, context.screenHeight)
               .withGradient(LinearGradient(
-                  colors: [Colors.lightBlue, Colors.lightGreen],
+                  colors: [Colors.lightBlue, selectedColor, Colors.lightGreen],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight))
               .make(),
@@ -59,6 +90,15 @@ class _HomePageState extends State<HomePage> {
           VxSwiper.builder(
             enlargeCenterPage: true,
             aspectRatio: 1,
+            onPageChanged: (index) {
+              final colorHex = radios![index].color;
+              //print(colorHex);
+
+              setState(() {
+                selectedColor = Color(int.tryParse(colorHex) ?? 0xff090909);
+                //print(selectedColor);
+              });
+            },
             itemCount: radios!.length,
             itemBuilder: (context, index) {
               final rad = radios![index];
@@ -118,16 +158,33 @@ class _HomePageState extends State<HomePage> {
                   .withRounded(value: 60)
                   .make()
                   .p16()
-                  .onInkDoubleTap(() {});
+                  .onInkDoubleTap(() {
+                playMusic(rad.url);
+              });
             },
           ).centered(),
           Align(
             alignment: Alignment.bottomCenter,
-            child: Icon(
-              CupertinoIcons.stop_circle,
-              color: Colors.white,
-              size: 50,
-            ),
+            child: [
+              if (isPlaying)
+                "Playing Now - ${selectedRadio.name} FM"
+                    .text
+                    .white
+                    .makeCentered(),
+              Icon(
+                isPlaying
+                    ? CupertinoIcons.stop_circle
+                    : CupertinoIcons.play_circle,
+                color: Colors.white,
+                size: 50.0,
+              ).onInkTap(() {
+                if (isPlaying) {
+                  audioPlayer.stop();
+                } else {
+                  playMusic(selectedRadio.url);
+                }
+              })
+            ].vStack(),
           ).pOnly(bottom: context.percentHeight * 12)
         ],
         fit: StackFit.expand,
